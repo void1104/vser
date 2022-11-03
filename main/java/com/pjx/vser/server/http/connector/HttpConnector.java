@@ -4,9 +4,12 @@ import com.pjx.vser.common.constant.NetConst;
 import com.pjx.vser.common.exception.LifecycleException;
 import com.pjx.vser.server.Connector;
 import com.pjx.vser.server.Lifecycle;
+import com.pjx.vser.server.factory.DefaultServerSocketFactory;
+import com.pjx.vser.server.factory.ServerSocketFactory;
 import com.pjx.vser.server.http.processor.HttpProcessor;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayDeque;
@@ -20,6 +23,16 @@ public class HttpConnector implements Connector, Lifecycle, Runnable {
      * 服务端监听socket
      */
     private ServerSocket serverSocket;
+
+    /**
+     * 服务端绑定ip地址
+     */
+    private String address;
+
+    /**
+     * Connector可承受的连接数量
+     */
+    private int acceptCount = 10;
 
     /**
      * 监听http服务的端口
@@ -40,6 +53,11 @@ public class HttpConnector implements Connector, Lifecycle, Runnable {
      * 存换已经创建的processor
      */
     private List<HttpProcessor> created = new ArrayList<>();
+
+    /**
+     * ServerSocket工厂
+     */
+    private ServerSocketFactory socketFactory;
 
     /**
      * 当前process数量
@@ -81,13 +99,49 @@ public class HttpConnector implements Connector, Lifecycle, Runnable {
      */
     private Thread thread;
 
+    public void setAddress(String address) {
+        this.address = address;
+    }
+
     /**
      * 同步锁object
      */
-    private Object threadSync = new Object();
+    private final Object threadSync = new Object();
 
-    public void initialize() throws LifecycleException {
+    public void initialize() throws LifecycleException, IOException {
+        if (initialized)
+            throw new LifecycleException("httpConnector.alreadyInitialized");
+        this.initialized = true;
 
+        serverSocket = open();
+    }
+
+    private ServerSocket open() throws IOException {
+
+        ServerSocketFactory factory = getFactory();
+
+        if (address == null) {
+            return factory.createSocket(port, acceptCount);
+        }
+
+        // 如果从本地能找到相应的地址，则绑定该地址为服务地址
+        InetAddress[] addresses = InetAddress.getAllByName(InetAddress.getLocalHost().getHostName());
+        for (InetAddress inetAddress : addresses) {
+            if (inetAddress.getHostAddress().equals(address)) {
+                return factory.createSocket(port, acceptCount, inetAddress);
+            }
+        }
+        return factory.createSocket(port, acceptCount);
+    }
+
+
+    private ServerSocketFactory getFactory() {
+        if (this.socketFactory == null) {
+            synchronized (this) {
+                this.socketFactory = new DefaultServerSocketFactory();
+            }
+        }
+        return (this.socketFactory);
     }
 
     /**
@@ -112,7 +166,7 @@ public class HttpConnector implements Connector, Lifecycle, Runnable {
         try {
             threadSync.wait(5000);
         } catch (InterruptedException e) {
-            ;
+
         }
         thread = null;
     }
@@ -164,9 +218,29 @@ public class HttpConnector implements Connector, Lifecycle, Runnable {
             Socket socket = null;
             try {
                 socket = serverSocket.accept();
+                if (connectionTimeout > 0) {
+                    socket.setSoTimeout(connectionTimeout);
+                }
             } catch (Exception e) {
 
             }
+
+            HttpProcessor processor = createProcessor();
+            // 拿不到processor，说明没有空闲的processor了，比较粗暴的忽略当前请求
+            if (processor == null) {
+                try {
+                    socket.close();
+                } catch (IOException e) {
+                    ;
+                }
+                continue;
+            }
+            processor.assign(socket);
+        }
+
+        // 唤醒在threadStop()方法中因wait()而睡眠的线程
+        synchronized (threadSync) {
+            threadSync.notifyAll();
         }
     }
 
