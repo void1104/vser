@@ -6,7 +6,6 @@ import java.net.ServerSocket;
 
 public class DefaultServerSocketFactory implements ServerSocketFactory {
 
-
     @Override
     public ServerSocket createSocket(int port) throws IOException {
         return new ServerSocket(port);

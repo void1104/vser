@@ -176,7 +176,7 @@ public class HttpConnector implements Connector, Lifecycle, Runnable {
      */
     private HttpProcessor newProcessor() {
 
-        HttpProcessor processor = new HttpProcessor();
+        HttpProcessor processor = new HttpProcessor(this);
         try {
             processor.start();
         } catch (Exception e) {

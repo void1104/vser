@@ -2,10 +2,28 @@ package com.pjx.vser.server.http.processor;
 
 import com.pjx.vser.common.exception.LifecycleException;
 import com.pjx.vser.server.Lifecycle;
+import com.pjx.vser.server.http.connector.HttpConnector;
 
 import java.net.Socket;
 
 public class HttpProcessor implements Lifecycle, Runnable {
+
+    /**
+     * 关联的连接器
+     */
+    private HttpConnector connector;
+
+    /**
+     * 类似信号量的作用,用于判断当前process是否空闲
+     */
+    private boolean available = false;
+
+
+    public HttpProcessor(HttpConnector connector) {
+
+        super();
+        this.connector = connector;
+    }
 
 
     /**
