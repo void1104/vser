@@ -45,6 +45,11 @@ public class HttpConnector implements Connector, Lifecycle, Runnable {
     private int connectionTimeout = NetConst.DEFAULT_CONNECTION_TIMEOUT;
 
     /**
+     * 输入缓冲区的大小/(byte)
+     */
+    private int bufferSize = 2048;
+
+    /**
      * processors池,用于存放空闲的processor
      */
     private final Deque<HttpProcessor> processors = new ArrayDeque<>();
@@ -101,6 +106,10 @@ public class HttpConnector implements Connector, Lifecycle, Runnable {
 
     public void setAddress(String address) {
         this.address = address;
+    }
+
+    public int getBufferSize() {
+        return bufferSize;
     }
 
     /**
